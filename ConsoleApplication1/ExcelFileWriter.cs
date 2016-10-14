@@ -1,9 +1,5 @@
-
-using System;
 using System.Collections.Generic;
-using System.Text;
 using Excel = Microsoft.Office.Interop.Excel;
-using System.Diagnostics;
 using System.Reflection;
 
 namespace MyClass.WriteToExcel

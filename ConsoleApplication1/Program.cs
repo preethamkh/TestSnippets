@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Dynamic;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Data;
@@ -10,7 +7,6 @@ using System.Configuration;
 using System.IO;
 using System.Net;
 using System.Net.Mail;
-using iTextSharp;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using System.Text.RegularExpressions;
@@ -21,6 +17,8 @@ using System.DirectoryServices.AccountManagement;
 using System.IO.Compression;
 using System.DirectoryServices;
 using Excel = Microsoft.Office.Interop.Excel;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 
 namespace ConsoleApplication1
@@ -42,13 +40,112 @@ namespace ConsoleApplication1
             //CreateiTextSharpPDF();
             //SendSSRSPDFEmail();
             //printEmailList();
-            ActiveDirectory();
-
+            //ActiveDirectory();
             //ArchiveLogFiles();
+
+            //RESTfulServices();
+            //var result = GetPageLength().GetAwaiter().GetResult();
+            //Console.WriteLine(result);
+
+            GenerateReport();
 
             Console.ReadLine();
         }
 
+        private static void GenerateReport()
+        {
+            ReportExecutionService rs = new ReportExecutionService();
+            rs.Credentials = new NetworkCredential("WEBSSRS", "#Rep0rt%e3", "CEDA");
+            rs.Url = "http://vicsql04/reportserver/ReportExecution2005.asmx";
+            rs.Url = "http://vicsqldev/reportserver/ReportExecution2005.asmx";
+
+            // Render arguments
+            byte[] result = null;
+            string reportPath = "/CEDA Membership Billing Invoice";
+
+            string format = "PDF";
+            string historyID = null;
+            string devInfo = @"<DeviceInfo><Toolbar>False</Toolbar></DeviceInfo>";
+
+            // Prepare report parameter.
+            RSExecution2005.ParameterValue[] parameters = new RSExecution2005.ParameterValue[2];
+            parameters[0] = new RSExecution2005.ParameterValue();
+            parameters[0].Name = "State";
+            parameters[0].Value = "NAT";
+            parameters[1] = new RSExecution2005.ParameterValue();
+            parameters[1].Name = "ID";
+            parameters[1].Value = "105129";
+
+            RSExecution2005.DataSourceCredentials[] credentials = new RSExecution2005.DataSourceCredentials[3];
+            credentials[0] = new RSExecution2005.DataSourceCredentials();
+            //credentials[0].UserName = "WEBSSRS";
+            //credentials[1] = new RSExecution2005.DataSourceCredentials();
+            //credentials[1].Password = "#Rep0rt%e3";
+            //credentials[2] = new RSExecution2005.DataSourceCredentials();
+            //credentials[2].DataSourceName = "iMIS";
+            credentials[0].UserName = "imis20_reports";
+            credentials[1] = new RSExecution2005.DataSourceCredentials();
+            credentials[1].Password = "!iMis99";
+            credentials[2] = new RSExecution2005.DataSourceCredentials();
+            credentials[2].DataSourceName = "iMISDevReports";
+
+            string encoding;
+            string mimeType;
+            string extension;
+            RSExecution2005.Warning[] warnings = null;
+            string[] streamIDs = null;
+
+            ExecutionInfo execInfo = new ExecutionInfo();
+            ExecutionHeader execHeader = new ExecutionHeader();
+
+            rs.ExecutionHeaderValue = execHeader;
+
+            execInfo = rs.LoadReport(reportPath, historyID);
+
+            rs.SetExecutionParameters(parameters, "en-us");
+            String SessionId = rs.ExecutionHeaderValue.ExecutionID;
+
+            Console.WriteLine("SessionID: {0}", rs.ExecutionHeaderValue.ExecutionID);
+
+            try
+            {
+                //result = rs.Render(format, devInfo, out extension, out encoding, out mimeType, out warnings, out streamIDs);
+                result = rs.Render(format, devInfo, out extension, out mimeType, out encoding, out warnings, out streamIDs);
+
+                execInfo = rs.GetExecutionInfo();
+
+                Console.WriteLine("Execution date and time: {0}", execInfo.ExecutionDateTime);
+            }
+            catch (SoapException e)
+            {
+                Console.WriteLine(e.Detail.OuterXml);
+            }
+            // Write the contents of the report to an MHTML file.
+            try
+            {
+                FileStream stream = new FileStream(@"C:\Work\Temp\testpdf.pdf", FileMode.Create);
+                //FileStream stream = File.Create("invoice.pdf", result.Length);
+                Console.WriteLine("File created.");
+                stream.Write(result, 0, result.Length);
+                Console.WriteLine("Result written to the file.");
+                stream.Close();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+        }
+
+        private static async Task<long?> GetPageLength()
+        {
+            HttpClient client = new HttpClient();
+            var httpMessage = await client.GetAsync("http://www.ceda.com.au");
+
+            Console.WriteLine("printing something else - awaiting previous task result");
+
+            // do other stuff while awaiting http request response
+            return httpMessage.Content.Headers.ContentLength;
+        }
 
         private static void ArchiveLogFiles()
         {
@@ -69,6 +166,51 @@ namespace ConsoleApplication1
                 }
             }
 
+        }
+
+        private static void RESTfulServices()
+        {
+            Uri address = new Uri("http://api.search.yahoo.com/ContentAnalysisService/V1/termExtraction");
+
+            // Create the web request  
+            HttpWebRequest request = WebRequest.Create(address) as HttpWebRequest;
+
+            // Set type to POST  
+            request.Method = "POST";
+            request.ContentType = "application/x-www-form-urlencoded";
+
+            // Create the data we want to send  
+            string appId = "YahooDemo";
+            string context = "Italian sculptors and painters of the renaissance"
+                                + "favored the Virgin Mary for inspiration";
+            string query = "madonna";
+
+            StringBuilder data = new StringBuilder();
+            data.Append("appid=" + HttpUtility.UrlEncode(appId));
+            data.Append("&context=" + HttpUtility.UrlEncode(context));
+            data.Append("&query=" + HttpUtility.UrlEncode(query));
+
+            // Create a byte array of the data we want to send  
+            byte[] byteData = UTF8Encoding.UTF8.GetBytes(data.ToString());
+
+            // Set the content length in the request headers  
+            request.ContentLength = byteData.Length;
+
+            // Write data  
+            using (Stream postStream = request.GetRequestStream())
+            {
+                postStream.Write(byteData, 0, byteData.Length);
+            }
+
+            // Get response  
+            using (HttpWebResponse response = request.GetResponse() as HttpWebResponse)
+            {
+                // Get the response stream  
+                StreamReader reader = new StreamReader(response.GetResponseStream());
+
+                // Console application output  
+                Console.WriteLine(reader.ReadToEnd());
+            }
         }
 
         private static void ActiveDirectory()
